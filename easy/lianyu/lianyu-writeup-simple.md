@@ -53,20 +53,13 @@ I tried anonymous FTP first, but it was rejected. Moved to the web on port 80.
 ![homepage](./homepage.png)
 
 The homepage is a static Arrowverse-themed page.
-On the homegage, we don't find any useful information. So, we can move on to gobuster to look for any hidden directories.
-
-2. #### What is the Web Directory you found?
+Went straight to that path in the browser and it worked. Then ran gobuster scoped to it:
 
 ```
-gobuster dir -u http://yu.thm -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
-```
-This gave me:
-```
-/island (Status: 301)
+gobuster dir -u http://cats.thm/<dir> -w /usr/share/wordlists/dirb/common.txt -t 50
 ```
 
-This gave me a second-level directory. I repeated the same approach, visit the page on our browser: 
-![island](./island.png)
+This gave me a second-level directory. I repeated the same approach — read the page, look for hints, gobuster the result — for the next layer.
 
 At one point gobuster with `common.txt` found nothing. I checked the source of the current page for clues about file extensions and added `-x` with thematic extensions:
 
