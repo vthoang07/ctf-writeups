@@ -22,7 +22,7 @@ Web exploitation, Active Directory attacks, privilege escalation, network enumer
 
 |---|---|---|---|---|
 
-| Lianyu | Easy | Web | Steganography, LFI, brute force | \[thm/lianyu/](thm/lianyu/) |
+| Lianyu | Easy | Web | Steganography, LFI, brute force | \[lianyu](thm/lianyu/) |
 
 
 
