@@ -1,4 +1,4 @@
-\# CTF Writeups
+# CTF Writeups
 
 
 
@@ -6,7 +6,7 @@ Personal writeups from CTF platforms — TryHackMe and HackTheBox — as part of
 
 
 
-\## Focus areas
+## Focus areas
 
 
 
@@ -14,31 +14,26 @@ Web exploitation, Active Directory attacks, privilege escalation, network enumer
 
 
 
-\## TryHackMe
-
-
-
+## TryHackMe
 | Machine | Difficulty | Category | Techniques | Writeup |
-
 |---|---|---|---|---|
-
-| Lianyu | Easy | Web | Steganography, LFI, brute force | \[lianyu](thm/lianyu/) |
-
-
-
-\## HackTheBox
+| Lianyu | Easy | Web | Steganography, LFI, brute force | [thm/lianyu/](thm/lianyu/) |
 
 
 
-\*Coming soon.\*
+## HackTheBox
 
 
 
-\---
+*Coming soon.*
 
 
 
-\## About
+---
+
+
+
+## About
 
 
 
@@ -46,5 +41,5 @@ Web exploitation, Active Directory attacks, privilege escalation, network enumer
 
 
 
-See also: \[pentest-lab-writeups](https://github.com/vthoang07/pentest-lab-writeups) for lab research and technical audits.
+See also: [pentest-lab-writeups](https://github.com/vthoang07/pentest-lab-writeups) for lab research and technical audits.
 
